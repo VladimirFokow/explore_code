@@ -12,6 +12,8 @@ EXT_LANG_MAP = {
     ".java": "Java",
     ".json": "JSON",
     ".md": "Markdown",
+    ".go": "Go",
+    ".rb": "Ruby",
     ".sh": "Shell",
     ".yml": "YAML",
     ".yaml": "YAML",
@@ -83,9 +85,13 @@ def build_tree(path):
         
         return file_info
 
-if __name__ == "__main__":
+def main():
     import sys
     root_path = sys.argv[1] if len(sys.argv) > 1 else "."
     tree = build_tree(root_path)
-    with open("_gitignore_code_structure.json", "w") as f:
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_gitignore_code_structure.json")
+    with open(output_path, "w") as f:
         json.dump(tree, f, indent=2)
+
+if __name__ == "__main__":
+    main()
