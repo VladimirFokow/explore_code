@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Codebase Viewer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Dark mode styles */
+        body { 
+            font-family: sans-serif; 
+            overflow: hidden; 
+            margin: 0; 
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        svg { 
+            width: 100vw; 
+            height: 100vh; 
+            background-color: #1a1a1a;
+        }
+        .node circle {
+            cursor: pointer;
+            stroke: #888;
+            stroke-width: 1.5px;
+        }
+        .node text {
+            font: 12px sans-serif;
+            pointer-events: none;
+            fill: #e0e0e0;
+        }
+        .node .click-region {
+            cursor: pointer;
+            fill-opacity: 0.15;
+            stroke-opacity: 0.4;
+            stroke-width: 1px;
+            rx: 5;
+            ry: 5;
+        }
+        .node .click-region:hover {
+            fill-opacity: 0.25;
+            stroke-opacity: 0.6;
+        }
+        .link {
+            fill: none;
+            stroke: #555;
+            stroke-width: 1.5px;
+        }
+        
+        /* Toast notification styles */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #4a9eff;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body>
+<svg></svg>
+<script>
+    const svg = d3.select("svg");
+    const g = svg.append("g");
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    const colorMap = {
+        "folder": "#4a9eff",
+        "Python": "#4a9eff",
+        "JavaScript": "#f7df1e",
+        "TypeScript": "#3178c6",
+        "HTML": "#e34c26",
+        "CSS": "#1572b6",
+        "C++": "#f34b7d",
+        "C#": "#239120",
+        "Java": "#ed8b00",
+        "Shell": "#89e051",
+        "JSON": "#ffd700",
+        "Markdown": "#4a9eff",
+        "YAML": "#cb4335",
+        "Unknown": "#888"
+    };
+
+    const zoom = d3.zoom()
+        .scaleExtent([0.2, 2])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+        svg.call(zoom);
+    
+    // Prevent default double-click zoom behavior on the SVG
+    svg.on("dblclick.zoom", null);
+
+    // Function to estimate text width more accurately
+    function getTextWidth(text, fontSize = 12) {
+        return text.length * (fontSize * 0.6); // Better approximation
+    }
+
+    d3.json("_gitignore_code_structure.json").then(data => {
+        const root = d3.hierarchy(data);
+        root.x0 = height / 2;
+        root.y0 = 0;
+
+        // Store the root path for building absolute paths
+        let rootPath = "";
+        
+        // Function to build absolute path for a node
+        function buildAbsolutePath(node) {
+            const pathParts = [];
+            let current = node;
+            
+            // Traverse up to root, collecting names
+            while (current && current.data.name) {
+                pathParts.unshift(current.data.name);
+                current = current.parent;
+            }
+            
+            // Join with appropriate separator (assuming Unix-style paths)
+            return rootPath + pathParts.join('/');
+        }
+        
+        // Function to copy text to clipboard and show toast
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(`Copied to clipboard: ${text}`);
+            }).catch(err => {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast(`Copied to clipboard: ${text}`);
+            });
+        }
+        
+        // Function to show toast notification
+        function showToast(message) {
+            // Remove any existing toast
+            const existingToast = document.querySelector('.toast');
+            if (existingToast) {
+                existingToast.remove();
+            }
+            
+            // Create new toast
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            // Show toast
+            setTimeout(() => toast.classList.add('show'), 100);
+            
+            // Hide and remove toast after 3 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Calculate total lines in the entire codebase for proportional sizing
+        let totalRootLines = 0;
+        
+        function calculateTotalLines(node) {
+            if (node.data.type === 'file') {
+                return node.data.lines || 0;
+            }
+            
+            let total = 0;
+            if (node.children) {
+                node.children.forEach(child => {
+                    total += calculateTotalLines(child);
+                });
+            }
+            if (node._children) {
+                node._children.forEach(child => {
+                    total += calculateTotalLines(child);
+                });
+            }
+            return total;
+        }
+
+        totalRootLines = calculateTotalLines(root);
+        console.log(`Total lines in codebase: ${totalRootLines}`);
+
+        // Function to calculate proportional height based on lines
+        function getProportionalHeight(lines, isFolder = false) {
+            if (!lines || lines === 0) {
+                return isFolder ? 40 : 16; // Minimum height for empty items
+            }
+            
+            // Scale factor: minimum 16px, maximum 200px
+            const minHeight = isFolder ? 40 : 16;
+            const maxHeight = 200;
+            const proportion = lines / totalRootLines;
+            
+            // Use logarithmic scaling to prevent extreme sizes
+            const logScale = Math.log(1 + proportion * 10) / Math.log(11);
+            const scaledHeight = minHeight + (maxHeight - minHeight) * logScale;
+            
+            return Math.max(minHeight, Math.min(maxHeight, scaledHeight));
+        }
+
+        // Initialize all nodes with fixed positions
+        function assignVerticalPositions(node, currentPosition = { value: 0 }) {
+            // Calculate this node's height based on its line count
+            const nodeLines = node.data.type === 'file' ? 
+                (node.data.lines || 0) : 
+                countTotalLines(node);
+            
+            const nodeHeight = getProportionalHeight(nodeLines, node.data.type === 'folder');
+            
+            // Assign vertical position to this node (center of its box)
+            node.fixedX = currentPosition.value + nodeHeight / 2;
+            node.nodeHeight = nodeHeight;
+            
+            // Move position down by this node's height plus some spacing
+            currentPosition.value += nodeHeight + 10; // 10px spacing between nodes
+            
+            // If this node has visible children, sort and position them
+            if (node.children) {
+                // Sort children: files first (grouped by language), then folders
+                const sortedChildren = [...node.children].sort((a, b) => {
+                    // Files come before folders
+                    if (a.data.type === 'file' && b.data.type === 'folder') return -1;
+                    if (a.data.type === 'folder' && b.data.type === 'file') return 1;
+                    
+                    // Both are files: sort by language, then by name
+                    if (a.data.type === 'file' && b.data.type === 'file') {
+                        const langCompare = (a.data.language || 'Unknown').localeCompare(b.data.language || 'Unknown');
+                        if (langCompare !== 0) return langCompare;
+                        return a.data.name.localeCompare(b.data.name);
+                    }
+                    
+                    // Both are folders: sort by name
+                    if (a.data.type === 'folder' && b.data.type === 'folder') {
+                        return a.data.name.localeCompare(b.data.name);
+                    }
+                    
+                    return 0;
+                });
+                
+                sortedChildren.forEach(child => {
+                    assignVerticalPositions(child, currentPosition);
+                });
+            }
+        }
+
+        function updateAllPositions() {
+            const position = { value: 30 }; // Start at 30px from top
+            assignVerticalPositions(root, position);
+            
+            // Update horizontal positions based on depth
+            root.descendants().forEach(d => {
+                d.x = d.fixedX;
+                d.y = d.depth * 200; // Horizontal spacing by depth
+            });
+        }
+
+        // Function to count total leaf files in a folder
+        function countLeafFiles(node) {
+            if (node.data.type === 'file') {
+                return 1;
+            }
+            
+            let count = 0;
+            if (node.children) {
+                node.children.forEach(child => {
+                    count += countLeafFiles(child);
+                });
+            }
+            if (node._children) {
+                node._children.forEach(child => {
+                    count += countLeafFiles(child);
+                });
+            }
+            return count;
+        }
+
+        // Function to count total lines in all files within a folder
+        function countTotalLines(node) {
+            if (node.data.type === 'file') {
+                return node.data.lines || 0;
+            }
+            
+            let totalLines = 0;
+            if (node.children) {
+                node.children.forEach(child => {
+                    totalLines += countTotalLines(child);
+                });
+            }
+            if (node._children) {
+                node._children.forEach(child => {
+                    totalLines += countTotalLines(child);
+                });
+            }
+            return totalLines;
+        }
+
+        // Initial positioning
+        updateAllPositions();
+        
+        // Store original positions to prevent jumping during transitions
+        function storeOriginalPositions(node) {
+            if (node.fixedX !== undefined) {
+                node.originalX = node.fixedX;
+            }
+            if (node.y !== undefined) {
+                node.originalY = node.y;
+            }
+            if (node.children) {
+                node.children.forEach(storeOriginalPositions);
+            }
+            if (node._children) {
+                node._children.forEach(storeOriginalPositions);
+            }
+        }
+        
+        storeOriginalPositions(root);
+        update(root);
+
+        function update(source) {
+            // Recalculate positions after expand/collapse
+            updateAllPositions();
+            
+            const nodes = root.descendants();
+            const links = root.links();
+
+            const node = g.selectAll("g.node")
+                .data(nodes, d => d.id || (d.id = ++i));
+
+            const nodeEnter = node.enter().append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+
+            // Add clickable region for folders (with proportional height)
+            nodeEnter.filter(d => d.data.type === "folder")
+                .append("rect")
+                .attr("class", "click-region")
+                .attr("x", 10) // Shifted right to avoid circle
+                .attr("y", d => -d.nodeHeight / 2) // Center the box vertically
+                .attr("width", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 20; // Proper padding
+                })
+                .attr("height", d => d.nodeHeight) // Proportional height
+                .style("fill", d => colorMap["folder"])
+                .style("stroke", d => colorMap["folder"])
+                .on("click", (event, d) => {
+                    if (d.children) {
+                        d._children = d.children;
+                        d.children = null;
+                    } else {
+                        d.children = d._children;
+                        d._children = null;
+                    }
+                    update(d);
+                })
+                .on("dblclick", (event, d) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const absolutePath = buildAbsolutePath(d);
+                    copyToClipboard(absolutePath);
+                });
+
+            // Add clickable region for files (with proportional height)
+            nodeEnter.filter(d => d.data.type === "file")
+                .append("rect")
+                .attr("class", "click-region")
+                .attr("x", 10) // Shifted right to avoid circle
+                .attr("y", d => -d.nodeHeight / 2) // Center the box vertically
+                .attr("width", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 15; // Proper padding
+                })
+                .attr("height", d => d.nodeHeight) // Proportional height
+                .style("fill", d => colorMap[d.data.language] || colorMap["Unknown"])
+                .style("stroke", d => colorMap[d.data.language] || colorMap["Unknown"])
+                .style("cursor", "default")
+                .on("dblclick", (event, d) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const absolutePath = buildAbsolutePath(d);
+                    copyToClipboard(absolutePath);
+                });
+
+            nodeEnter.append("circle")
+                .attr("r", 5)
+                .style("fill", d => {
+                    if (d.data.type === "folder") return colorMap["folder"];
+                    return colorMap[d.data.language] || colorMap["Unknown"];
+                })
+                .on("click", (event, d) => {
+                    if (d.data.type === "folder") {
+                        if (d.children) {
+                            d._children = d.children;
+                            d.children = null;
+                        } else {
+                            d.children = d._children;
+                            d._children = null;
+                        }
+                        update(d);
+                    }
+                })
+                .on("dblclick", (event, d) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const absolutePath = buildAbsolutePath(d);
+                    copyToClipboard(absolutePath);
+                });
+
+            // Main text label - positioned based on box height
+            nodeEnter.append("text")
+                .attr("dy", d => {
+                    // For folders, position text in upper portion to leave room for stats
+                    if (d.data.type === "folder") {
+                        return Math.max(-d.nodeHeight/3, -15); // Upper third, but not too high
+                    }
+                    return 3; // Files keep simple center positioning
+                })
+                .attr("x", 15) // Shifted right to avoid circle for both folders and files
+                .style("text-anchor", "start")
+                .text(d => d.data.name)
+                .style("fill", "#e0e0e0")
+                .style("font-weight", d => d.data.type === "folder" ? "bold" : "normal");
+
+            // Add file count label for folders
+            nodeEnter.filter(d => d.data.type === "folder")
+                .append("text")
+                .attr("class", "file-count")
+                .attr("dy", d => Math.max(-5, -d.nodeHeight/6)) // Position in middle-upper area
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 40;
+                })
+                .style("text-anchor", "start")
+                .style("fill", "#bbb")
+                .style("font-size", "10px")
+                .style("font-weight", "normal")
+                .text(d => "files: ");
+
+            // Add file count number for folders
+            nodeEnter.filter(d => d.data.type === "folder")
+                .append("text")
+                .attr("class", "file-count-number")
+                .attr("dy", d => Math.max(-5, -d.nodeHeight/6))
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 70;
+                })
+                .style("text-anchor", "start")
+                .style("fill", colorMap["folder"])
+                .style("font-size", "10px")
+                .style("font-weight", "bold")
+                .text(d => countLeafFiles(d));
+
+            // Add sum of lines label for folders
+            nodeEnter.filter(d => d.data.type === "folder")
+                .append("text")
+                .attr("class", "lines-sum")
+                .attr("dy", d => Math.max(8, d.nodeHeight/6)) // Position in middle-lower area
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 40;
+                })
+                .style("text-anchor", "start")
+                .style("fill", "#bbb")
+                .style("font-size", "10px")
+                .style("font-weight", "normal")
+                .text(d => "sum of lines: ");
+
+            // Add sum of lines number for folders
+            nodeEnter.filter(d => d.data.type === "folder")
+                .append("text")
+                .attr("class", "lines-sum-number")
+                .attr("dy", d => Math.max(8, d.nodeHeight/6))
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 110;
+                })
+                .style("text-anchor", "start")
+                .style("fill", colorMap["folder"])
+                .style("font-size", "10px")
+                .style("font-weight", "bold")
+                .text(d => countTotalLines(d));
+
+            // Add line count label for files
+            nodeEnter.filter(d => d.data.type === "file")
+                .append("text")
+                .attr("class", "line-count")
+                .attr("dy", 3)
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 35;
+                })
+                .style("text-anchor", "start")
+                .style("fill", "#bbb")
+                .style("font-size", "10px")
+                .style("font-weight", "normal")
+                .text(d => d.data.lines ? "lines: " : "");
+
+            // Add line count number for files
+            nodeEnter.filter(d => d.data.type === "file")
+                .append("text")
+                .attr("class", "line-count-number")
+                .attr("dy", 3)
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 65;
+                })
+                .style("text-anchor", "start")
+                .style("fill", d => colorMap[d.data.language] || colorMap["Unknown"])
+                .style("font-size", "10px")
+                .style("font-weight", "bold")
+                .text(d => d.data.lines || "");
+
+            nodeEnter.append("title")
+                .text(d => {
+                    if (d.data.type === "folder") {
+                        const fileCount = countLeafFiles(d);
+                        const totalLines = countTotalLines(d);
+                        const percentage = ((totalLines / totalRootLines) * 100).toFixed(1);
+                        return `Folder containing ${fileCount} files with ${totalLines} total lines (${percentage}% of codebase)`;
+                    }
+                    if (d.data.lines) {
+                        const percentage = ((d.data.lines / totalRootLines) * 100).toFixed(2);
+                        return `${d.data.language || 'Unknown'} file with ${d.data.lines} lines (${percentage}% of codebase)`;
+                    }
+                    return d.data.language ? `Language: ${d.data.language}` : "File";
+                });
+
+            const nodeUpdate = nodeEnter.merge(node);
+
+            nodeUpdate.attr("transform", d => `translate(${d.y},${d.x})`);
+
+            // Update click regions with proper sizing
+            nodeUpdate.selectAll(".click-region")
+                .attr("y", d => -d.nodeHeight / 2)
+                .attr("width", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return d.data.type === "folder" ? textWidth + 20 : textWidth + 15;
+                })
+                .attr("height", d => d.nodeHeight);
+
+            // Update text positions based on new box heights
+            nodeUpdate.selectAll("text:not(.file-count):not(.file-count-number):not(.lines-sum):not(.lines-sum-number):not(.line-count):not(.line-count-number)")
+                .attr("dy", d => {
+                    if (d.data.type === "folder") {
+                        return Math.max(-d.nodeHeight/3, -15);
+                    }
+                    return 3;
+                });
+
+            // Update file count labels for folders
+            nodeUpdate.selectAll(".file-count")
+                .text(d => "files: ")
+                .attr("dy", d => Math.max(-5, -d.nodeHeight/6))
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 40;
+                });
+
+            // Update file count numbers for folders
+            nodeUpdate.selectAll(".file-count-number")
+                .text(d => countLeafFiles(d))
+                .attr("dy", d => Math.max(-5, -d.nodeHeight/6))
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 70;
+                });
+
+            // Update sum of lines labels for folders
+            nodeUpdate.selectAll(".lines-sum")
+                .text(d => "sum of lines: ")
+                .attr("dy", d => Math.max(8, d.nodeHeight/6))
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 40;
+                });
+
+            // Update sum of lines numbers for folders
+            nodeUpdate.selectAll(".lines-sum-number")
+                .text(d => countTotalLines(d))
+                .attr("dy", d => Math.max(8, d.nodeHeight/6))
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 110;
+                });
+
+            // Update line count labels for files
+            nodeUpdate.selectAll(".line-count")
+                .text(d => d.data.lines ? "lines: " : "")
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 35;
+                });
+
+            // Update line count numbers for files
+            nodeUpdate.selectAll(".line-count-number")
+                .text(d => d.data.lines || "")
+                .attr("x", d => {
+                    const textWidth = getTextWidth(d.data.name);
+                    return textWidth + 65;
+                });
+
+            node.exit().remove();
+
+            const link = g.selectAll("path.link")
+                .data(links, d => d.target.id);
+
+            const linkEnter = link.enter().insert("path", "g")
+                .attr("class", "link")
+                .attr("d", diagonal);
+
+            linkEnter.merge(link).attr("d", diagonal);
+
+            link.exit().remove();
+        }
+
+        function diagonal(d) {
+            return `M${d.source.y},${d.source.x}C${(d.source.y + d.target.y) / 2},${d.source.x} ${(d.source.y + d.target.y) / 2},${d.target.x} ${d.target.y},${d.target.x}`;
+        }
+    });
+
+    let i = 0;
+</script>
+</body>
+</html>
