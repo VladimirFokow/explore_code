@@ -60,6 +60,7 @@ This generates the `_gitignore_code_structure.json` file (in the current folder)
 - `Graphviz Interactive Preview`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview
 - `Code Analyzer 2.0`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=SoftwareEvolutionLab.codeanalyzer2 - uses gitinspector
 - `gitinspector`: cli tool: https://github.com/ejwa/gitinspector
+- `VS Code Counter`: VSCode ext (no viz, but maybe I could use info from it for my viz): https://marketplace.visualstudio.com/items?itemName=uctakeoff.vscode-counter
 
 **Not** useful for Python in VSCode:
 - `Code Graph`: only VisualStudio: https://marketplace.visualstudio.com/items?itemName=YaobinOuyang.CodeAtlas
