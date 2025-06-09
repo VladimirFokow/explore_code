@@ -1,4 +1,4 @@
-# Explore code
+# 🧭 Explore code
 
 When exploring new projects: I often want to get an overview of the folder & file structure,  
 see where the "bulk" of code is written.
@@ -57,7 +57,7 @@ This generates the `_gitignore_code_structure.json` file (in the current folder)
 
 - `Crabviz`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=chanhx.crabviz
 - `code2flow`: cli tool: https://github.com/scottrogowski/code2flow
-- `Graphviz Interactive Preview`: https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview
+- `Graphviz Interactive Preview`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview
 - `Code Analyzer 2.0`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=SoftwareEvolutionLab.codeanalyzer2 - uses gitinspector
 - `gitinspector`: cli tool: https://github.com/ejwa/gitinspector
 
