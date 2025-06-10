@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 
 EXT_LANG_MAP = {
     ".py": "Python",
@@ -86,7 +87,6 @@ def build_tree(path):
         return file_info
 
 def main():
-    import sys
     root_path = sys.argv[1] if len(sys.argv) > 1 else "."
     tree = build_tree(root_path)
     output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_gitignore_code_structure.json")

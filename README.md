@@ -1,11 +1,12 @@
-# 🧭 `xc` - Explore code
+# 🧭 Explore code: `xc`
 
-When exploring new projects: I often want to get an overview of the folder & file structure,  
-see where the "bulk" of code is written.
+When exploring a new project:  
+**get an overview of the folder & file structure**  
+(see the organization of files and code).
 
-This tool **shows all the structure**, e.g.:
+This tool **shows all the structure**:
 
-<img src="./img/example.png" alt="Example image" width="400" />
+<img src="./img/example.png" alt="Example image" width="800" />
 
 
 <br />
@@ -43,7 +44,7 @@ or:
 xc path/to/any/folder
 ```
 
-✅ Open [http://localhost:8000/](http://localhost:8000/) in your browser.
+✅ Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 
 <br />
@@ -70,14 +71,15 @@ xc path/to/any/folder
 
 ## Alternatives
 
-- `Crabviz`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=chanhx.crabviz
-- `code2flow`: cli tool: https://github.com/scottrogowski/code2flow
-- `Graphviz Interactive Preview`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview
-- `Code Analyzer 2.0`: VSCode ext: https://marketplace.visualstudio.com/items?itemName=SoftwareEvolutionLab.codeanalyzer2 - uses gitinspector
-- `gitinspector`: cli tool: https://github.com/ejwa/gitinspector
-- `VS Code Counter`: VSCode ext (no viz, but maybe I could use info from it for my viz): https://marketplace.visualstudio.com/items?itemName=uctakeoff.vscode-counter
+- [`Crabviz`](https://marketplace.visualstudio.com/items?itemName=chanhx.crabviz): VSCode ext
+- [`code2flow`](https://github.com/scottrogowski/code2flow): cli tool
+- [`Graphviz Interactive Preview`](https://marketplace.visualstudio.com/items?itemName=tintinweb.graphviz-interactive-preview): VSCode ext
+- [`Code Analyzer 2.0`](https://marketplace.visualstudio.com/items?itemName=SoftwareEvolutionLab.codeanalyzer2): VSCode ext, - uses `gitinspector`
+- [`gitinspector`](https://github.com/ejwa/gitinspector): cli tool
+- [`VS Code Counter`](https://marketplace.visualstudio.com/items?itemName=uctakeoff.vscode-counter): VSCode ext (no viz, but maybe I could use info from it for my viz)
+- [`tinygrad/sz.py`](https://github.com/tinygrad/tinygrad/blob/master/sz.py): script, output in the terminal
 
 **Not** useful for Python in VSCode:
-- `Code Graph`: only VisualStudio: https://marketplace.visualstudio.com/items?itemName=YaobinOuyang.CodeAtlas
-- `Dependency Cruiser`: only JS ecosystem: https://github.com/sverweij/dependency-cruiser
+- [`Code Graph`](https://marketplace.visualstudio.com/items?itemName=YaobinOuyang.CodeAtlas): only VisualStudio
+- [`Dependency Cruiser`](https://github.com/sverweij/dependency-cruiser): only JS ecosystem
 

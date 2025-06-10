@@ -67,18 +67,146 @@
             opacity: 1;
             transform: translateX(0);
         }
+
+        /* Minimap styles */
+        .minimap {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 180px; /* Fixed minimap width */
+            height: calc(100vh - 40px); /* Fixed minimap height */
+            border: 0px solid #888888;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .minimap svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .minimap .node circle {
+            stroke-width: 1px;  /* Increased stroke width */
+            stroke: #aeaeae; /* stroke color for better visibility*/
+            opacity: 1; /* Ensure full opacity */
+        }
+
+        .minimap .node text {
+            font-size: 4px;
+            display: none; /* Hide text in minimap for cleaner look */
+        }
+
+        .minimap .link {
+            stroke-width: 1px;  /* Increased stroke width */
+            stroke: #dddddd;  /* stroke color for better visibility */
+            opacity: 1; /* Ensure full opacity */
+        }
+
+        /* Box on the minimap */
+        .viewport-indicator {
+            fill: rgba(198, 198, 198, 0.1);
+            stroke: #a5a5a5;
+            stroke-width: 0.2;
+            cursor: move;
+        }
+
+        /* Button style */
+        #toggle-minimap, #reset-zoom, #expand-all {
+            position: absolute; /* Important: changed to absolute */
+            z-index: 10; /* Ensure it's above the SVG */
+            left: 10px;     /*Adjust as needed*/
+            padding: 5px 10px;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #toggle-minimap { top: 10px; } /*Position each button */
+        #reset-zoom { top: 40px; }
+        #expand-all { top: 70px; }
     </style>
 </head>
 <body>
-<svg></svg>
+
+<button id="toggle-minimap">Toggle Minimap</button>
+<button id="reset-zoom">Reset Zoom</button>
+<button id="expand-all">Expand All Folders</button>
+
+<svg id="main-svg"></svg>
+
+<div class="minimap">
+    <svg id="minimap-svg"></svg>
+</div>
+
 <script>
-    const svg = d3.select("svg");
+    const MIN_ZOOM = 0.1;  // min zoom level
+    const MAX_ZOOM = 2;  // max zoom level
+    const ZOOM_SPEED = 0.03;  // lower = slower
+    const MARGIN = 0;  // space around content when panning (recommended: 0)
+    const BOUNDARY_PADDING = 100;  // when panning - for content to not be lost beyond the screen
+
+    const svg = d3.select("#main-svg");
     const g = svg.append("g");
     const width = window.innerWidth;
     const height = window.innerHeight;
 
+    // Minimap setup
+    const minimapDiv = d3.select(".minimap"); // Select the minimap div
+    const minimapSvg = d3.select("#minimap-svg");
+    const minimapG = minimapSvg.append("g");
+    const minimapWidth = 180;
+    const minimapHeight = window.innerHeight - 40;
+    const minimapPadding = 10; // Padding inside the minimap border for content
+    //
+    let minimapEnabled = true; // Start with the minimap enabled
+    const toggleMinimapButton = d3.select("#toggle-minimap");
+    const resetZoomButton = d3.select("#reset-zoom");
+    const expandAllButton = d3.select("#expand-all");
+    //
+    toggleMinimapButton.on("click", () => {
+        minimapEnabled = !minimapEnabled;
+        minimapDiv.style("display", minimapEnabled ? "block" : "none"); // Show/hide the entire div
+
+        if (minimapEnabled) {
+            //Re-render minimap after enabling
+            if (nodesCache && linksCache) {
+                updateMinimap(nodesCache, linksCache);
+            }
+
+        }
+    });
+    //
+    resetZoomButton.on("click", () => {
+        svg.transition().duration(750).call(
+            zoom.transform,
+            d3.zoomIdentity // Reset to identity transform
+        );
+    });
+    //
+    expandAllButton.on("click", () => {
+        expandAll(root);
+        update(root);
+    });
+    //
+    function expandAll(node) {
+        if (!node) return;
+        if (node._children) { // Only expand if it has collapsed children
+            node.children = node._children;
+            node._children = null;
+            if (node.children) {
+                node.children.forEach(expandAll); //Recursively expand all children
+            }
+        } else if (node.children) {
+            node.children.forEach(expandAll); //Recursively expand all children if already expanded
+        }
+    }
+    let minimapScale = 1;
+    let viewportIndicator;
+
     const colorMap = {
-        "folder": "#38c9b3",
+        "folder": "#4a9eff",
         "Python": "#4a9eff",
         "JavaScript": "#f7df1e",
         "TypeScript": "#3178c6",
@@ -89,21 +217,126 @@
         "Java": "#ed8b00",
         "Shell": "#89e051",
         "JSON": "#ffd700",
-        "Markdown": "#20afe7",
-        "Go": "#00add8",
-        "Ruby": "#701516",
+        "Markdown": "#4a9eff",
         "YAML": "#cb4335",
-        "Unknown": "#888888"
+        "Unknown": "#888"
     };
 
+    // Set up Zooming and Panning:
+    let treeBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     const zoom = d3.zoom()
-        .scaleExtent([0.2, 2])
+        .scaleExtent([MIN_ZOOM, MAX_ZOOM])
+        .filter(event => (event.type === "wheel" ? event.ctrlKey : !event.button))
         .on("zoom", (event) => {
-            g.attr("transform", event.transform);
+            currentTransform = event.transform;
+            g.attr("transform", currentTransform);
+            updateViewportIndicator(currentTransform);
+        });
+    svg.call(zoom).on("wheel.zoom", null); // disable D3's default wheel handler
+    let currentTransform = d3.zoomIdentity;
+    zoom.on("zoom", (event) => {
+        currentTransform = event.transform;
+        g.attr("transform", currentTransform);
+        updateViewportIndicator(currentTransform);
+    });
+    //
+    function calculateTreeBounds(nodes) {
+        if (!nodes || nodes.length === 0) {
+            return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+        }
+
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+
+        nodes.forEach(node => {
+            const textWidth = node.data.name.length * 6;
+            const nodeLeft = node.y - (node.children || node._children ? textWidth + 10 : 0);
+            const nodeRight = node.y + (node.children || node._children ? 0 : textWidth + 10);
+
+            minX = Math.min(minX, node.x);
+            maxX = Math.max(maxX, node.x);
+            minY = Math.min(minY, nodeLeft);
+            maxY = Math.max(maxY, nodeRight);
         });
 
-        svg.call(zoom);
-    
+        return {
+            minX: minX - MARGIN,
+            maxX: maxX + MARGIN,
+            minY: minY - MARGIN,
+            maxY: maxY + MARGIN
+        };
+    }
+    //
+    function clampPanToBounds(transform) {
+        const bounds = treeBounds;
+        const scale = transform.k;
+
+        let newX = transform.x;
+        let newY = transform.y;
+
+        const treeScreenLeft = bounds.minY * scale + transform.x;
+        const treeScreenRight = bounds.maxY * scale + transform.x;
+        const treeScreenTop = bounds.minX * scale + transform.y;
+        const treeScreenBottom = bounds.maxX * scale + transform.y;
+
+        if (treeScreenRight < BOUNDARY_PADDING) {
+            newX = BOUNDARY_PADDING - bounds.maxY * scale;
+        } else if (treeScreenLeft > width - BOUNDARY_PADDING) {
+            newX = (width - BOUNDARY_PADDING) - bounds.minY * scale;
+        }
+
+        if (treeScreenBottom < BOUNDARY_PADDING) {
+            newY = BOUNDARY_PADDING - bounds.maxX * scale;
+        } else if (treeScreenTop > height - BOUNDARY_PADDING) {
+            newY = (height - BOUNDARY_PADDING) - bounds.minX * scale;
+        }
+
+        return d3.zoomIdentity.translate(newX, newY).scale(scale);
+    }
+    // Handle wheel events manually
+    svg.node().addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const { deltaX, deltaY, ctrlKey } = event;
+
+        let newTransform = currentTransform;
+
+        if (ctrlKey) {
+            // Handle pinch zoom
+            const zoomAmount = Math.exp(-deltaY * ZOOM_SPEED);
+            let newScale = currentTransform.k * zoomAmount;
+
+            // Clamp zoom level
+            newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
+
+            const [px, py] = d3.pointer(event, svg.node());
+            const inv = currentTransform.invert([px, py]);
+
+            newTransform = d3.zoomIdentity
+                .translate(px, py)
+                .scale(newScale)
+                .translate(-inv[0], -inv[1]);
+
+        } else {
+            // Handle pan — scale delta by inverse of zoom
+            const scale = 1 / currentTransform.k;
+            newTransform = currentTransform.translate(-deltaX * scale, -deltaY * scale);
+        }
+
+        // Apply boundary clamping
+        newTransform = clampPanToBounds(newTransform);
+
+        // Apply clamped + scaled transform
+        svg.call(zoom.transform, newTransform);
+    }, { passive: false });
+    ////////////////////////////////////////////////////////////////////////////
+
+    let i = 0;
+
+    let nodesCache; // Cache nodes for minimap re-render
+    let linksCache; // Cache links for minimap re-render
+    let root;
+    let update;  // Declare in global scope
+
     // Prevent default double-click zoom behavior on the SVG
     svg.on("dblclick.zoom", null);
 
@@ -113,9 +346,26 @@
     }
 
     d3.json("_gitignore_code_structure.json").then(data => {
-        const root = d3.hierarchy(data);
+        root = d3.hierarchy(data);
         root.x0 = height / 2;
         root.y0 = 0;
+
+        // Initially expand the root node and its direct children
+        if (root._children) {
+            root.children = root._children;
+            root._children = null;
+        }
+        if (root.children) {
+            root.children.forEach(child => {
+                if (child._children) {
+                    child.children = child._children;
+                    child._children = null;
+                }
+            });
+        }
+
+        // Calculate initial tree bounds
+        treeBounds = calculateTreeBounds(root.descendants());
 
         // Store the root path for building absolute paths
         let rootPath = "";
@@ -124,7 +374,7 @@
         function buildAbsolutePath(node) {
             const pathParts = [];
             let current = node;
-            
+
             // Traverse up to root, collecting names
             while (current && current.data.name) {
                 pathParts.unshift(current.data.name);
@@ -334,14 +584,16 @@
         }
         
         storeOriginalPositions(root);
-        update(root);
 
-        function update(source) {
+        update = function(source) {
             // Recalculate positions after expand/collapse
             updateAllPositions();
-            
+
             const nodes = root.descendants();
             const links = root.links();
+
+            // Recalculate bounds when tree structure changes
+            treeBounds = calculateTreeBounds(nodes);
 
             const node = g.selectAll("g.node")
                 .data(nodes, d => d.id || (d.id = ++i));
@@ -632,14 +884,145 @@
             linkEnter.merge(link).attr("d", diagonal);
 
             link.exit().remove();
-        }
+
+
+            // Ensure we stay within bounds after tree updates
+            currentTransform = clampPanToBounds(currentTransform);
+            svg.call(zoom.transform, currentTransform);
+
+
+            // Cache nodes and links before updating minimap
+            nodesCache = nodes;
+            linksCache = links;
+
+            if (minimapEnabled) {
+                updateMinimap(nodes, links);
+            }
+        };
 
         function diagonal(d) {
             return `M${d.source.y},${d.source.x}C${(d.source.y + d.target.y) / 2},${d.source.x} ${(d.source.y + d.target.y) / 2},${d.target.x} ${d.target.y},${d.target.x}`;
         }
+
+        update(root);  // Initial render
     });
 
-    let i = 0;
+
+    // Store minimapG's transform components for consistent use
+    let minimapGOffsetX = 0;
+    let minimapGOffsetY = 0;
+
+    function updateMinimap(nodes, links) {
+        if (!minimapEnabled) return;  // Exit early if minimap is disabled
+
+        if (!nodes || nodes.length === 0 || !treeBounds.maxX) return; // Added !treeBounds.maxX to prevent division by zero if bounds are not ready
+
+        const treeDataWidth = treeBounds.maxY - treeBounds.minY;
+        const treeDataHeight = treeBounds.maxX - treeBounds.minX;
+
+        if (treeDataWidth <= 0 || treeDataHeight <= 0) return; // Avoid division by zero or negative scales
+
+        const scaleX = (minimapWidth - 2 * minimapPadding) / treeDataWidth;
+        const scaleY = (minimapHeight - 2 * minimapPadding) / treeDataHeight;
+        minimapScale = Math.min(scaleX, scaleY);
+        if (minimapScale <= 0) minimapScale = 0.1; // Prevent non-positive scale
+
+        // Calculate offsets to center the scaled tree within the minimap (including padding)
+        minimapGOffsetX = minimapPadding + (minimapWidth - 2 * minimapPadding - treeDataWidth * minimapScale) / 2 - treeBounds.minY * minimapScale;
+        minimapGOffsetY = minimapPadding + (minimapHeight - 2 * minimapPadding - treeDataHeight * minimapScale) / 2 - treeBounds.minX * minimapScale;
+
+        minimapG.attr("transform", `translate(${minimapGOffsetX}, ${minimapGOffsetY}) scale(${minimapScale})`);
+
+        const minimapLink = minimapG.selectAll("path.link").data(links, d => d.target.id);
+        minimapLink.enter().insert("path", "g")
+            .attr("class", "link")
+            .merge(minimapLink)
+            .attr("d", d => `M${d.source.y},${d.source.x}C${(d.source.y + d.target.y) / 2},${d.source.x} ${(d.source.y + d.target.y) / 2},${d.target.x} ${d.target.y},${d.target.x}`);
+        minimapLink.exit().remove();
+
+        const minimapNode = minimapG.selectAll("g.node").data(nodes, d => d.id);
+        const minimapNodeEnter = minimapNode.enter().append("g").attr("class", "node");
+        minimapNodeEnter.append("circle").attr("r", 2);
+
+        minimapNodeEnter.merge(minimapNode)
+            .attr("transform", d => `translate(${d.y},${d.x})`)
+            .select("circle")
+            .style("fill", d => d.data.type === "folder" ? colorMap["folder"] : (colorMap[d.data.language] || colorMap["Unknown"]));
+        minimapNode.exit().remove();
+
+        updateViewportIndicator(currentTransform);
+    }
+
+    function updateViewportIndicator(mainTransform) {
+        if (!minimapEnabled) return; // Exit early if minimap is disabled
+
+        if (!viewportIndicator) {
+            viewportIndicator = minimapSvg.append("rect")
+                .attr("class", "viewport-indicator")
+                .call(d3.drag()
+                    .on("start", function(event) {
+                        d3.select(this).raise();
+                    })
+                    .on("drag", function(event) {
+                        const rect = d3.select(this);
+                        const currentRectWidth = +rect.attr("width");
+                        const currentRectHeight = +rect.attr("height");
+
+                        // Get mouse position relative to minimapSvg
+                        const [mouseX, mouseY] = d3.pointer(event.sourceEvent, minimapSvg.node());
+
+                        // Target center of the indicator in minimap SVG coords is the mouse position
+                        const targetIndicatorCenterX = mouseX;
+                        const targetIndicatorCenterY = mouseY;
+
+                        // Calculate visual top-left for the indicator, clamped to minimap bounds
+                        let visualRectX = targetIndicatorCenterX - currentRectWidth / 2;
+                        let visualRectY = targetIndicatorCenterY - currentRectHeight / 2;
+
+                        visualRectX = Math.max(0, Math.min(minimapWidth - currentRectWidth, visualRectX));
+                        visualRectY = Math.max(0, Math.min(minimapHeight - currentRectHeight, visualRectY));
+                        rect.attr("x", visualRectX).attr("y", visualRectY);
+
+                        // Convert the (potentially unclamped) targetIndicatorCenter from minimap SVG coords to tree data coords
+                        // Use the stored/consistent minimapGOffsetX, minimapGOffsetY, and minimapScale
+                        const treeTargetY = (targetIndicatorCenterX - minimapGOffsetX) / minimapScale; // minimap X maps to tree Y
+                        const treeTargetX = (targetIndicatorCenterY - minimapGOffsetY) / minimapScale; // minimap Y maps to tree X
+
+                        // Calculate new transform for the main SVG to center on these tree coordinates
+                        const newMainViewTransform = d3.zoomIdentity
+                            .scale(currentTransform.k) // Keep current zoom level
+                            .translate(width / 2 - treeTargetY * currentTransform.k,
+                                height / 2 - treeTargetX * currentTransform.k);
+
+                        const clampedNewMainTransform = clampPanToBounds(newMainViewTransform);
+                        svg.call(zoom.transform, clampedNewMainTransform);
+                    })
+                );
+        }
+
+        // Calculate visible area of the main graph in tree coordinates
+        const topLeftTree = mainTransform.invert([0, 0]); // [treeY, treeX]
+        const bottomRightTree = mainTransform.invert([width, height]); // [treeY, treeX]
+
+        const viewportTreeY = topLeftTree[0];
+        const viewportTreeX = topLeftTree[1];
+        const viewportTreeWidth = bottomRightTree[0] - topLeftTree[0];
+        const viewportTreeHeight = bottomRightTree[1] - topLeftTree[1];
+
+        // Convert tree viewport to minimap coordinates
+        // minimapGOffsetX and minimapGOffsetY are translations of the minimap group,
+        // they already account for treeBounds.minY/X and padding.
+        const indicatorX = viewportTreeY * minimapScale + minimapGOffsetX;
+        const indicatorY = viewportTreeX * minimapScale + minimapGOffsetY;
+        const indicatorWidth = viewportTreeWidth * minimapScale;
+        const indicatorHeight = viewportTreeHeight * minimapScale;
+
+        viewportIndicator
+            .attr("x", indicatorX)
+            .attr("y", indicatorY)
+            .attr("width", Math.max(0, indicatorWidth)) // Ensure non-negative width/height
+            .attr("height", Math.max(0, indicatorHeight));
+    }
 </script>
 </body>
 </html>
