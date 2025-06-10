@@ -81,6 +81,7 @@ xc path/to/any/folder
 - [`tinygrad/sz.py`](https://github.com/tinygrad/tinygrad/blob/master/sz.py): script, output in the terminal
 
 **Not** useful for Python in VSCode:
-- [`Code Graph`](https://marketplace.visualstudio.com/items?itemName=YaobinOuyang.CodeAtlas): only VisualStudio
 - [`Dependency Cruiser`](https://github.com/sverweij/dependency-cruiser): only JS ecosystem
+- [`Code Graph`](https://marketplace.visualstudio.com/items?itemName=YaobinOuyang.CodeAtlas): only VisualStudio
+- [`Code maps`](https://learn.microsoft.com/en-us/visualstudio/modeling/map-dependencies-across-your-solutions): only VisualStudio
 
