@@ -1,4 +1,4 @@
-# 🧭 Explore code: `xc`
+# 🧭 `xc` - Explore code
 
 When exploring a new project:  
 **get an overview of the folder & file structure**  
@@ -17,6 +17,7 @@ This tool **shows all the structure**:
 
 Install this package:
 ```bash
+git clone https://github.com/VladimirFokow/explore_code.git
 cd explore_code  # the root folder of this repo
 pip install -e .
 ```
