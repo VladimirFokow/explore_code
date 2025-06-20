@@ -79,6 +79,7 @@ xc path/to/any/folder
 - [`gitinspector`](https://github.com/ejwa/gitinspector): cli tool
 - [`VS Code Counter`](https://marketplace.visualstudio.com/items?itemName=uctakeoff.vscode-counter): VSCode ext (no viz, but maybe I could use info from it for my viz)
 - [`tinygrad/sz.py`](https://github.com/tinygrad/tinygrad/blob/master/sz.py): script, output in the terminal
+- [`deepwiki.com`](deepwiki.com): if you replace `github.com` by `deepwiki.com` of any repo -> it generates explanations of the code structure
 
 **Not** useful for Python in VSCode:
 - [`Dependency Cruiser`](https://github.com/sverweij/dependency-cruiser): only JS ecosystem
