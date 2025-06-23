@@ -80,7 +80,7 @@ xc path/to/any/folder
 - [`VS Code Counter`](https://marketplace.visualstudio.com/items?itemName=uctakeoff.vscode-counter): VSCode ext (no viz, but maybe I could use info from it for my viz)
 - [`tinygrad/sz.py`](https://github.com/tinygrad/tinygrad/blob/master/sz.py): script, output in the terminal
 - [`deepwiki.com`](https://deepwiki.com): if you replace `github.com` by `deepwiki.com` of any repo -> it generates explanations of the code structure
-- [`cloc`](https://github.com/AlDanial/cloc): cli tool
+- [`cloc`](https://github.com/AlDanial/cloc): cli tool. Has links to more **Other Counters**!
 
 **Not** useful for Python in VSCode:
 - [`Dependency Cruiser`](https://github.com/sverweij/dependency-cruiser): only JS ecosystem
