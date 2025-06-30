@@ -81,6 +81,7 @@ xc path/to/any/folder
 - [`tinygrad/sz.py`](https://github.com/tinygrad/tinygrad/blob/master/sz.py): script, output in the terminal
 - [`deepwiki.com`](https://deepwiki.com): if you replace `github.com` by `deepwiki.com` of any repo -> it generates explanations of the code structure
 - [`cloc`](https://github.com/AlDanial/cloc): cli tool. Has links to more **Other Counters**!
+- [`tree`](https://en.wikipedia.org/wiki/Tree_(command)): cli command
 
 **Not** useful for Python in VSCode:
 - [`Dependency Cruiser`](https://github.com/sverweij/dependency-cruiser): only JS ecosystem
