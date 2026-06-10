@@ -82,6 +82,7 @@ xc path/to/any/folder
 - [`deepwiki.com`](https://deepwiki.com): if you replace `github.com` by `deepwiki.com` of any repo -> it generates explanations of the code structure
 - [`cloc`](https://github.com/AlDanial/cloc): cli tool. Has links to more **Other Counters**!
 - [`tree`](https://en.wikipedia.org/wiki/Tree_(command)): cli command
+- VSCode extension [`Spatial 3D File Explorer`](https://marketplace.visualstudio.com/items?itemName=spatial-3d-file-explorer.spatial-3d-file-explorer) ([github](https://github.com/Osamariyad2003/Spatial-3D-File-Explorer))
 
 **Not** useful for Python in VSCode:
 - [`Dependency Cruiser`](https://github.com/sverweij/dependency-cruiser): only JS ecosystem
